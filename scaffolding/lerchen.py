@@ -33,7 +33,7 @@ llm = LLM(
     llm_model_pth,
     dtype="half",                # The data type for the model weights and activations
     max_num_seqs=8,              # Maximum number of sequences per iteration. Default is 256
-    max_model_len=4096,          # Model context length
+    max_model_len=8192,          # Model context length
     trust_remote_code=True,      # Trust remote code (e.g., from HuggingFace) when downloading the model and tokenizer
     tensor_parallel_size=4,      # The number of GPUs to use for distributed execution with tensor parallelism
     gpu_memory_utilization=0.95, # The ratio (between 0 and 1) of GPU memory to reserve for the model
@@ -156,8 +156,8 @@ class PythonREPL:
 
 sampling_params = SamplingParams(
     temperature=0.7,
-    top_p=0.95,
-    max_tokens=4096,
+    top_p=0.93,
+    max_tokens=8192,
     stop=None
 )
 
@@ -396,11 +396,18 @@ def make_problem_progress(question: str, info_set: List[Tuple[str, str]], missin
                     "4. Explain your reasoning for each fact discovered.\n\n"
                     "Format your response as a series of facts and their reasoning, each starting with '→ Fact: [your fact]'\n"
                     "Reasoning: [your reasoning]'.\n"
-                    "For example:\n"
-                    "→ Fact: $n$ is divisible by $9$.\n"
-                    "Reasoning: We're given that the sum of the digits of $n$ is divisible by $9$, so $n$ itself must be divisible by $9$.\n"
-                    "→ Fact: Quadraliteral $ABCD$ is cyclic\n"
-                    "Reasoning: $\angle ABC = \pi - \angle ABX = \pi - \angle ADY = \angle ADC$.\n"
+                    "For example, for the question 'Let triangle $ABC$ have circumcenter $O$ and incenter $I$ with $IA$ perpendicular to $OI$, circumradius $13$, and inradius $6$. Find $AB\cdot AC$.', "
+                    "if we are missing a characterization of point $I$, a good response would be:\n"
+                    "→ Fact: Line $AI$ bisects angle $BAC$.\n"
+                    "Reasoning: $I$ lies on the angle bisector of $\\angle BAC$, by definition of the incenter.\n"
+                    "→ Fact: Line $AI$ intersects the circumcircle of triangle $ABC$ at the midpoint of arc $BC$ not containing $A$.\n"
+                    "Reasoning: Line $AI$ bisects angle $BAC$, so it must intersect the circumcircle at the midpoint of arc $BC$ not containing $A$.\n"
+                    "→ Fact: $AO = OM$.\n"
+                    "Reasoning: $O$ is the circumcenter of triangle $ABC$, so since $M$ lies on the circumcircle, $AO = OM$.\n"
+                    "→ Fact: $OI$ is the altitude of isosceles triangle $AOM$.\n"
+                    "Reasoning: $IA$ is perpendicular to $OI$, so because $M$ lies on line $IA$, $OI$ is the altitude of isosceles triangle $AOM$.\n"
+                    "→ Fact: $AI = IM$.\n"
+                    "Reasoning: $OI$ is the altitude of isosceles triangle $AOM$, so since $AO=OM$, $AI = IM$.\n"
                 ).format(
                     question,
                     "\n".join(f"Fact: {info}\nReasoning: {reasoning}" for info, reasoning in info_set),
@@ -425,11 +432,17 @@ def make_problem_progress(question: str, info_set: List[Tuple[str, str]], missin
                     "5. Explain your reasoning for each fact discovered.\n\n"
                     "Format your response as a series of facts and their reasoning, each starting with '→ Fact: [your fact]'\n"
                     "Reasoning: [your reasoning]'.\n"
-                    "For example:\n"
-                    "→ Fact: The Pythagorean theorem relates the sides of a right triangle.\n"
-                    "Reasoning: In a right-angled triangle, the square of the hypotenuse equals the sum of the squares of the other two sides.\n"
-                    "→ Fact: Differentiation rules can be used to find the slope of a function.\n"
-                    "Reasoning: Applying differentiation allows us to find the rate at which a function changes at any point.\n"
+                    "For example, for the question 'Let triangle $ABC$ have circumcenter $O$ and incenter $I$ with $IA$ perpendicular to $OI$, circumradius $13$, and inradius $6$. Find $AB\cdot AC$.', a good response would be:\n"
+                    "→ Fact: Line $AI$ bisects angle $BAC$.\n"
+                    "Reasoning: $I$ lies on the angle bisector of $\\angle BAC$, by definition of the incenter.\n"
+                    "→ Fact: Line $AI$ intersects the circumcircle of triangle $ABC$ at the midpoint of arc $BC$ not containing $A$.\n"
+                    "Reasoning: Line $AI$ bisects angle $BAC$, so it must intersect the circumcircle at the midpoint of arc $BC$ not containing $A$.\n"
+                    "→ Fact: $AO = OM$.\n"
+                    "Reasoning: $O$ is the circumcenter of triangle $ABC$, so since $M$ lies on the circumcircle, $AO = OM$.\n"
+                    "→ Fact: $OI$ is the altitude of isosceles triangle $AOM$.\n"
+                    "Reasoning: $IA$ is perpendicular to $OI$, so because $M$ lies on line $IA$, $OI$ is the altitude of isosceles triangle $AOM$.\n"
+                    "→ Fact: $AI = IM$.\n"
+                    "Reasoning: $OI$ is the altitude of isosceles triangle $AOM$, so since $AO=OM$, $AI = IM$.\n"
                 ).format(
                     question,
                     "\n".join(f"Fact: {info}\nReasoning: {reasoning}" for info, reasoning in info_set)
@@ -500,13 +513,13 @@ def check_hallucinations(question: str, info_set: List[Tuple[str, str]]) -> List
         
     validation_prompt = [
         {'role': 'user', 'content': (
-            "Please analyze each mathematical fact below and verify if it is 100% mathematically correct and directly derivable from the question. The one exception is that if the fact is taken from the solution to a different problem, it automatically correct.\n\n"
+            "Please analyze each mathematical fact below and verify if it is 100% mathematically correct and directly derivable from the question, and facts already provided. The one exception is that if the fact is taken from the solution to a different problem, it automatically correct.\n\n"
             "Question:\n{}\n\n"
             "Facts to verify:\n{}\n\n"
             "For each fact, respond ONLY with the statement number and either VERIFIED or INCORRECT, followed by a brief explanation.\n"
             "Example format:\n"
-            "[1] VERIFIED: Can be proven using given values\n"
-            "[2] INCORRECT: Contains assumptions not supported by the question"
+            "[1] VERIFIED: $I$ is the incenter of triangle $ABC$, so by definition of the incenter it lies on the angle bisector of $\\angle BAC$.\n"
+            "[2] INCORRECT: We can not find the length of segment $AB$ using Ptolemy's Theorem on cyclic quadrilateral $ABMO$, because we do not know the length of segment $AO$.\n"
         ).format(
             question,
             "\n".join(f"[{i+1}] Fact: {info}\nReasoning: {reasoning}" for i, (info, reasoning) in enumerate(info_set))
@@ -536,6 +549,69 @@ def check_hallucinations(question: str, info_set: List[Tuple[str, str]]) -> List
     print(f"Verified info_set: {verified_statements}")
     
     return verified_statements
+
+def reduce_question(question: str, info_set: List[Tuple[str, str]]) -> Tuple[bool, str]:
+    """
+    Reduces the question to a simpler one based on the provided information set.
+
+    Args:
+        question (str): The original math question.
+        info_set (List[Tuple[str, str]]): A list of tuples containing facts and their reasoning.
+
+    Returns:
+        Tuple[bool, str]: A boolean indicating if the question was reduced and the new question.
+    """
+    if not question or not isinstance(question, str):
+        print("Warning: Invalid question input")
+        return False, question
+
+    if not info_set:
+        print("Info set is empty. No reduction performed.")
+        return False, question
+
+    # Construct the prompt for the LLM
+    prompt_intro = (
+        "Given the following mathematical question and the set of known facts, "
+        "please provide a reduced version of the question by incorporating the relevant facts. "
+        "If the question can not be reduced, please return the original question.\n\n"
+        "Question:\n"
+        f"{question}\n\n"
+        "Known Facts:\n"
+    )
+
+    for fact, reasoning in info_set:
+        prompt_intro += f"- {fact}\n  Reasoning: {reasoning}\n"
+
+    prompt_intro += (
+        "\nProvide the reduced question that includes the applied facts. "
+        "Ensure that the new question would return the same answer as the original question."
+        "For example, if the original question asked for the area of a triangle $AVW$, "
+        "and we know from our known facts that $AV = AW = 2$, and that the area of the triangle is given by $\frac{1}{2}AV\\cdot AW\\sin \\angle VAW$, "
+        "the reduced question could ask for the $2\\sin \\angle VAW$."
+    )
+
+    conversation = [
+        {'role': 'user', 'content': prompt_intro}
+    ]
+
+    try:
+        # Generate the response from the LLM
+        response = batch_message_generate([conversation])[0][-1]['content']
+        
+        # Extract the reduced question from the response
+        reduced_question = response.strip()
+        
+        # Check if the reduced question is different from the original
+        if reduced_question and reduced_question != question:
+            print("Question successfully reduced.")
+            return True, reduced_question
+        else:
+            print("No reduction applied to the question.")
+            return False, question
+
+    except Exception as e:
+        print(f"Error in reduce_question: {str(e)}")
+        return False, question
 
 def run_tool_integrated_reasoning(question: str, info_set: List[Tuple[str, str]], solution_outline: List[str]) -> int:
     """
@@ -682,12 +758,21 @@ def predict_for_question(question: str) -> int:
         print(f"Starting prediction for question: {question}")
 
         info_set = []
-        
+        was_reduced = True
+        cnt = 0
+        while was_reduced and cnt < 3:
+            cnt += 1
+            info_set = []
+            info_set = make_problem_progress(question, info_set, [])
+            info_set = check_hallucinations(question, info_set)
+            reduced_question, was_reduced = reduce_question(question, info_set)
+            question = reduced_question if was_reduced else question
+            print(f"Question after {cnt} reductions: {question}")
         for iteration_number in range(1, 6):
             if time.time() - start_time > max_execution_time:
                 print("Total execution time limit exceeded")
                 return 210
-                
+
             print(f"--- Iteration {iteration_number} ---")
             # Step 1: Generate solution outlines
             print("Generating solution outlines.")
@@ -708,9 +793,6 @@ def predict_for_question(question: str) -> int:
                         info_set = make_problem_progress(question, info_set, missing_steps)
                     else:
                         print("No specific missing steps identified. Making general progress.")
-            
-            print("Making general problem progress.")
-            info_set = make_problem_progress(question, info_set, [])
 
             # Step 4: Check for hallucinations in info_set
             print("Checking for hallucinations in info_set.")
