@@ -16,7 +16,8 @@ def generate_helpful_info(question: str, similar_questions: List[Tuple[str, floa
             "Here are some similar questions:\n"
             + "\n\n".join([f"Question (similarity: {sim:.3f}): {q}" for q, sim in similar_questions])
             + "\n\nBased on these similar questions, please identify 3-5 key mathematical concepts, "
-            "techniques, formulas, or intuitions that could be helpful for solving the current question. "
+            "techniques, formulas, or intuitions that could be helpful for solving the current question, "
+            "and adapt them to the context of the current question. "
             "Format each insight as:\n"
             "→ Fact: [mathematical fact or technique]\n"
             "Reasoning: [why this might be helpful for the current question]"

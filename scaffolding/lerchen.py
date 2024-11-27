@@ -108,21 +108,6 @@ def extract_boxed_text(text):
         return ""
     return matches[0]
 
-from collections import Counter
-import random
-def select_answer(answers):
-    counter = Counter()
-    for answer in answers:
-        try:
-            if int(answer) == float(answer) and int(answer) != 210:
-                counter[int(answer)] += 1 + random.random() / 1_000
-        except:
-            pass
-    if not counter:
-        return 210
-    _, answer = sorted([(v,k) for k,v in counter.items()], reverse=True)[0]
-    return answer%1000
-
 import os
 import tempfile
 import subprocess
@@ -196,45 +181,6 @@ def batch_message_generate(list_of_messages) -> List[List[dict]]:
 
     return list_of_messages
 
-def batch_message_filter(list_of_messages) -> Tuple[List[List[dict]], List[str]]:
-    extracted_answers = []
-    list_of_messages_to_keep = []
-    for messages in list_of_messages:
-        answer = extract_boxed_text(messages[-1]['content'])
-        if answer:
-            extracted_answers.append(answer)
-        else:
-            list_of_messages_to_keep.append(messages)
-    return list_of_messages_to_keep, extracted_answers
-
-def batch_message_execute(list_of_messages) -> List[List[dict]]:
-    for messages in list_of_messages:
-        python_code = extract_python_code(messages[-1]['content'])
-        python_code = process_python_code(python_code)
-        try:
-            print('c', end='')
-            is_successful, output = PythonREPL()(python_code)
-            if is_successful:
-                print('o', end='')
-            else:
-                print('e', end='')
-        except Exception as e:
-            print('f', end='')
-            output = str(e)
-        print(python_code)
-        print()
-        print(output)
-        print("\n\n")
-        
-        # Use the new parse_steps function with error handling
-        parsed_output = parse_steps(output)
-        if not parsed_output:  # If no steps found, use the raw output
-            messages.append({'role': 'user', 'content': output})
-        else:
-            messages.append({'role': 'user', 'content': '\n'.join(parsed_output)})
-    print()
-    return list_of_messages
-
 #===============================================================================================================
 #Everything above this line WORKS. Don't try to fix it at all.
 #===============================================================================================================
@@ -254,10 +200,13 @@ def generate_solution_outline(question: str, info_set: List[Tuple[str, str]], n:
     try:
         prompt_intro = (
             "Please provide a detailed solution approach outline for the following math question. "
+            "Before proceeding, generate a detailed analysis of the problem. "
             "The outline should consist of clear, enumerated steps that logically "
             "progress towards the solution, but without including any computations or numerical values. "
             "Each step should specify what to do, which formulas or theorems to use, "
             "and what to plug into them, but should not perform any calculations or include any numbers. "
+            "If any step can be broken down into smaller, less complex steps, do not output the step and instead output the smaller steps. "
+            "All steps should be very simple and digestible."
             "The outline should be similar to the example provided.\n\n"
         )
         print("Prompt intro prepared.")
@@ -284,7 +233,7 @@ def generate_solution_outline(question: str, info_set: List[Tuple[str, str]], n:
                         conversation.append({'role': 'user', 'content': f"Fact: {info}\nReasoning: {reasoning}"})
     
                     conversation.append({'role': 'user', 'content': 
-                        "Here is an example of a question, valuable information, and a good generated solution approach outline. Please follow the solution outline format as well:\n"
+                        "Here is an example of a question, given information, and a good generated solution approach outline. Please follow the solution outline format as well:\n"
                         "Question:\nLet $ABCD$ be a tetrahedron such that $AB = CD = \\sqrt{41}$, "
                         "$AC = BD = \\sqrt{80}$, and $BC = AD = \\sqrt{89}$. There exists a point $I$ "
                         "inside the tetrahedron such that the distances from $I$ to each of the faces "
@@ -294,14 +243,17 @@ def generate_solution_outline(question: str, info_set: List[Tuple[str, str]], n:
                         "Find $m+n+p$.\n"
                         "Facts and Reasoning:\n"
                         "Fact: An isosceles tetrahedron can be inscribed in a rectangular box.\n"
-                        "Reasoning: The symmetry of an isosceles tetrahedron allows it to fit perfectly inside a box with sides corresponding to its dimensions.\n"
+                        "Reasoning: Taken from the solution to a different problem.\n"
                         "Solution approach outline:\n"
                         "1. Set up a coordinate system to model the tetrahedron within the box.\n"
                         "2. Identify the coordinates of the vertices based on the given side lengths.\n"
-                        "3. Determine the volume of the tetrahedron using the scalar triple product.\n"
-                        "4. Calculate the surface area of the tetrahedron by finding the areas of its faces using Heron's formula.\n"
-                        "5. Use the formula relating the inradius, volume, and surface area of a tetrahedron to find the inradius.\n"
-                        "6. Simplify the expression for the inradius to match the required form and compute $m + n + p$.\n"
+                        "3. Determine the vectors representing the edges of the tetrahedron.\n"
+                        "4. Calculate the volume of the tetrahedron using the scalar triple product.\n"
+                        "5. Find the areas of each face using Heron's formula.\n"
+                        "6. Compute the total surface area by summing the areas of the faces.\n"
+                        "7. Use the formula relating the inradius, volume, and surface area of a tetrahedron: \( r = \\frac{3V}{S} \).\n"
+                        "8. Solve for \( r \) and simplify the expression to match the required form.\n"
+                        "9. Compute \( m + n + p \) based on the simplified expression.\n"
                     })
                 list_of_messages.append(conversation)
                 print(f"Conversation {i+1} created.")
@@ -357,6 +309,9 @@ def validate_solution_outline(question: str, outline: List[str], info_set: List[
                 "Please carefully analyze this mathematical solution outline and determine if it would definitely work when fully implemented.\n\n"
                 "Question:\n{}\n\n"
                 "Proposed solution outline:\n{}\n\n"
+                "Before proceeding, generate a detailed analysis of the solution outline. "
+                "If any step can be broken down into smaller, less complex steps, do not output the step and instead output the smaller steps. "
+                "All steps should be very simple and digestible.\n\n"
                 "Your task:\n"
                 "1. Carefully check if each step is mathematically valid, necessary, and sufficiently detailed.\n"
                 "2. Verify that no crucial steps or details are missing.\n"
@@ -431,6 +386,9 @@ def make_problem_progress(question: str, info_set: List[Tuple[str, str]], missin
                     "Question:\n{}\n\n"
                     "Current Information:\n{}\n\n"
                     "Missing Steps to Address:\n{}\n\n"
+                    "Before proceeding, generate a detailed analysis of the missing steps. "
+                    "If any fact can be broken down into smaller, less complex steps, do not output the fact and instead output the smaller steps. "
+                    "All facts should be very simple and digestible.\n\n"
                     "Please:\n"
                     "1. Analyze each missing step systematically.\n"
                     "2. Identify specific mathematical relationships, theorems, or properties needed.\n"
@@ -439,10 +397,10 @@ def make_problem_progress(question: str, info_set: List[Tuple[str, str]], missin
                     "Format your response as a series of facts and their reasoning, each starting with '→ Fact: [your fact]'\n"
                     "Reasoning: [your reasoning]'.\n"
                     "For example:\n"
-                    "→ Fact: The sum of angles in a triangle is 180 degrees.\n"
-                    "Reasoning: In Euclidean geometry, the sum of the interior angles of any triangle is always 180 degrees.\n"
-                    "→ Fact: The area of a circle is πr^2.\n"
-                    "Reasoning: The area formula is derived from the definition of pi and the relationship between a circle's radius and its circumference.\n"
+                    "→ Fact: $n$ is divisible by $9$.\n"
+                    "Reasoning: We're given that the sum of the digits of $n$ is divisible by $9$, so $n$ itself must be divisible by $9$.\n"
+                    "→ Fact: Quadraliteral $ABCD$ is cyclic\n"
+                    "Reasoning: $\angle ABC = \pi - \angle ABX = \pi - \angle ADY = \angle ADC$.\n"
                 ).format(
                     question,
                     "\n".join(f"Fact: {info}\nReasoning: {reasoning}" for info, reasoning in info_set),
@@ -456,6 +414,9 @@ def make_problem_progress(question: str, info_set: List[Tuple[str, str]], missin
                     "Please analyze this mathematical problem to discover new insights and potential solution paths.\n\n"
                     "Question:\n{}\n\n"
                     "Current Information:\n{}\n\n"
+                    "Before proceeding, generate a detailed analysis of the problem. "
+                    "If any fact can be broken down into smaller, less complex steps, do not output the fact and instead output the smaller steps. "
+                    "All facts should be very simple and digestible.\n\n"
                     "Please:\n"
                     "1. Identify key mathematical properties or relationships not yet explored.\n"
                     "2. Apply relevant theorems or formulas that might yield useful results.\n"
@@ -539,7 +500,7 @@ def check_hallucinations(question: str, info_set: List[Tuple[str, str]]) -> List
         
     validation_prompt = [
         {'role': 'user', 'content': (
-            "Please analyze each mathematical fact below and verify if it is 100% mathematically correct and directly derivable from the question. Do not make assumptions.\n\n"
+            "Please analyze each mathematical fact below and verify if it is 100% mathematically correct and directly derivable from the question. The one exception is that if the fact is taken from the solution to a different problem, it automatically correct.\n\n"
             "Question:\n{}\n\n"
             "Facts to verify:\n{}\n\n"
             "For each fact, respond ONLY with the statement number and either VERIFIED or INCORRECT, followed by a brief explanation.\n"
@@ -594,8 +555,10 @@ def run_tool_integrated_reasoning(question: str, info_set: List[Tuple[str, str]]
             {'role': 'system', 'content': (
                 "You are writing code to solve a math problem. "
                 "You are an intelligent assistant integrating natural language reasoning with programming to solve complex mathematical problems. "
-                "Before writing any code, you must comment thoroughly on your reasoning for each step, and double-check your logic to ensure accuracy and correctness. "
-                "Moreover, every value you get must be ran through sp.simplify() to check if it can be simplified."
+                "Before writing any code, generate a detailed analysis of the problem and your planned approach. "
+                "Moreover, every value you get must be run through sp.simplify() to check if it can be simplified. "
+                "If any step can be broken down into smaller, less complex steps, do not output the step and instead output the smaller steps. "
+                "All steps should be very simple and digestible."
             )},
             {'role': 'user', 'content': (
                 "Question:\n{}\n\n"
@@ -652,14 +615,16 @@ def run_tool_integrated_reasoning(question: str, info_set: List[Tuple[str, str]]
                     conversation.append({'role': 'user', 'content': 
                         "Please review our conversation and provide a complete recap of the solution, "
                         "keeping all mathematical expressions in a clear form. "
-                        "Most importantly, state your final integer answer in this exact format on its own line:\n"
+                        "Most importantly, in your response, state your final integer answer in this exact format on its own line:\n"
                         "FINAL ANSWER: [your integer answer]"
                     })
                     
                     # Generate recap response
                     recap_messages = batch_message_generate([conversation])
                     recap_content = recap_messages[0][-1]['content']
-                    
+
+                    print("FINAL CONVERSATION PRINT LOWKEY YOU CAN JUST LOOK AT THIS:\n")
+                    print(conversation)
                     # Extract final answer with more robust parsing
                     try:
                         # First try exact format
@@ -726,7 +691,7 @@ def predict_for_question(question: str) -> int:
             print(f"--- Iteration {iteration_number} ---")
             # Step 1: Generate solution outlines
             print("Generating solution outlines.")
-            solution_outlines = generate_solution_outline(question, info_set, n=3)
+            solution_outlines = generate_solution_outline(question, info_set, n=1)
             print(f"Generated {len(solution_outlines)} solution outlines.")
             
             for idx, outline in enumerate(solution_outlines, start=1):
