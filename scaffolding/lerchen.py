@@ -573,6 +573,7 @@ def reduce_question(question: str, info_set: List[Tuple[str, str]]) -> Tuple[boo
     prompt_intro = (
         "Given the following mathematical question and the set of known facts, "
         "please provide a reduced version of the question by incorporating the relevant facts. "
+        "If you can reword the question to be more understandable, do so."
         "If the question can not be reduced, please return the original question.\n\n"
         "Question:\n"
         f"{question}\n\n"
@@ -691,6 +692,8 @@ def run_tool_integrated_reasoning(question: str, info_set: List[Tuple[str, str]]
                     conversation.append({'role': 'user', 'content': 
                         "Please review our conversation and provide a complete recap of the solution, "
                         "keeping all mathematical expressions in a clear form. "
+                        "For each step, if you can split it into smaller steps, do so. "
+                        "For each step, provide the reasoning for your steps. "
                         "Most importantly, in your response, state your final integer answer in this exact format on its own line:\n"
                         "FINAL ANSWER: [your integer answer]"
                     })
@@ -758,17 +761,7 @@ def predict_for_question(question: str) -> int:
         print(f"Starting prediction for question: {question}")
 
         info_set = []
-        was_reduced = True
-        cnt = 0
-        while was_reduced and cnt < 3:
-            cnt += 1
-            info_set = []
-            info_set = make_problem_progress(question, info_set, [])
-            info_set = check_hallucinations(question, info_set)
-            reduced_question, was_reduced = reduce_question(question, info_set)
-            question = reduced_question if was_reduced else question
-            print(f"Question after {cnt} reductions: {question}")
-        for iteration_number in range(1, 6):
+        for iteration_number in range(1, 3):
             if time.time() - start_time > max_execution_time:
                 print("Total execution time limit exceeded")
                 return 210
@@ -784,8 +777,11 @@ def predict_for_question(question: str) -> int:
                 # Step 2: Validate each solution outline
                 is_valid, missing_steps = validate_solution_outline(question, outline, info_set)
                 if is_valid:
-                    print("Valid solution outline found. Running tool_integrated_reasoning...")
-                    return run_tool_integrated_reasoning(question, info_set, outline)
+                    import numpy as np
+                    p = np.random.rand()
+                    if p < 0.3:
+                        print("Valid solution outline found. Running tool_integrated_reasoning...")
+                        return run_tool_integrated_reasoning(question, info_set, outline)
                 else:
                     # Step 3: Make problem progress with missing steps
                     if missing_steps:
@@ -798,6 +794,10 @@ def predict_for_question(question: str) -> int:
             print("Checking for hallucinations in info_set.")
             info_set = check_hallucinations(question, info_set)
             print(f"Info set after hallucination check: {info_set}")
+            question, was_reduced = reduce_question(question, info_set)
+            if was_reduced:
+                print(f"Question after reduction: {question}")
+                info_set = []
         
         # If no valid approach is found after all iterations
         print("No valid solution outline validated after all iterations. Returning fallback answer 210.")
