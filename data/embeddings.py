@@ -1,19 +1,14 @@
-# In actual submission, will use some open source embedding model
-# instead of OpenAI's.
-from dotenv import load_dotenv
-import os
-from openai import OpenAI
-load_dotenv()
+from transformers import AutoTokenizer, AutoModel
+import torch
 
-api_key = os.getenv("OPENAI_API_KEY")
-if api_key is None:
-    raise ValueError("API key not found. Please set the OPENAI_API_KEY environment variable.")
-
-client = OpenAI(api_key=api_key)
+# Load the MathBERT model and tokenizer
+tokenizer = AutoTokenizer.from_pretrained("tbs17/MathBERT-custom")
+model = AutoModel.from_pretrained("tbs17/MathBERT-custom")
 
 def get_embedding(sentence):
-    response = client.embeddings.create(
-        input=sentence,
-        model="text-embedding-3-small"
-    )
-    return response.data[0].embedding
+    inputs = tokenizer(sentence, return_tensors='pt')
+    with torch.no_grad():
+        outputs = model(**inputs)
+    # Compute the mean of the last hidden states
+    embeddings = outputs.last_hidden_state.mean(dim=1).squeeze()
+    return embeddings.numpy()
