@@ -92,23 +92,23 @@ def terminate_workers(input_queue1, input_queue2, p1, p2):
     print("Worker processes terminated.")
 
 def batch_conversations_generate(conversations, tokenizer, input_queue1, output_queue1, 
-                                 input_queue2, output_queue2, model='both') -> list:
+                                 input_queue2, output_queue2, model='model1') -> list:
     """
-    Generate responses for a batch of conversations using specified models.
+    Generate responses for a batch of conversations using the specified model.
 
     Args:
         conversations (list[list[dict]]): A list of conversations, where each conversation is a list of messages (dicts with 'role' and 'content').
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to prepare prompts.
         input_queue1, output_queue1: Queues for model1.
         input_queue2, output_queue2: Queues for model2.
-        model (str): 'model1', 'model2', or 'both'. Determines which model(s) to use.
+        model (str): 'model1' or 'model2'. Determines which model to use.
 
     Returns:
         list[list[dict]]: The updated conversations with assistant responses appended.
     """
-    # Prepare the prompts by applying the chat template
+    # Prepare the prompts by applying the tokenizer's chat template
     conversations_texts = [
-        apply_chat_template(
+        tokenizer.apply_chat_template(
             conversation=conversation,
             tokenize=False,
             add_generation_prompt=True
@@ -118,13 +118,13 @@ def batch_conversations_generate(conversations, tokenizer, input_queue1, output_
 
     responses = []
 
-    if model in ['model1', 'both']:
+    if model == 'model1':
         # Send to model1
         input_queue1.put(conversations_texts)
         output1 = output_queue1.get()
         responses.extend(output1)
 
-    if model in ['model2', 'both']:
+    elif model == 'model2':
         # Send to model2
         input_queue2.put(conversations_texts)
         output2 = output_queue2.get()
@@ -132,36 +132,11 @@ def batch_conversations_generate(conversations, tokenizer, input_queue1, output_
 
     # Append the responses to the respective conversations
     response_index = 0
-    for i, conversation in enumerate(conversations):
-        if model in ['model1', 'both']:
-            conversation.append({'role': 'assistant', 'content': responses[response_index]})
-            response_index += 1
-        if model == 'both':
-            conversation.append({'role': 'assistant', 'content': responses[response_index]})
-            response_index += 1
+    for conversation in conversations:
+        conversation.append({'role': 'assistant', 'content': responses[response_index]})
+        response_index += 1
 
     return conversations
-
-def apply_chat_template(conversation, tokenize=False, add_generation_prompt=True):
-    """
-    Applies a chat template to a conversation. This is a placeholder function.
-    You should replace this with your actual template application logic.
-
-    Args:
-        conversation (list[dict]): The conversation history.
-        tokenize (bool): Whether to tokenize the conversation.
-        add_generation_prompt (bool): Whether to add a generation prompt.
-
-    Returns:
-        str: The formatted prompt.
-    """
-    # Example implementation. Replace with your actual logic.
-    prompt = ""
-    for message in conversation:
-        prompt += f"{message['role']}: {message['content']}\n"
-    if add_generation_prompt:
-        prompt += "assistant:"
-    return prompt
 
 if __name__ == '__main__':
     set_seed(42)
@@ -183,28 +158,7 @@ if __name__ == '__main__':
     # If different, initialize separate tokenizers for each model
     tokenizer = AutoTokenizer.from_pretrained(model1_path)
 
-    # Example conversations
-    conversations = [
-        [{'role': 'user', 'content': 'Hello!'}],
-        [{'role': 'user', 'content': 'How are you?'}],
-        [{'role': 'user', 'content': 'Tell me a joke.'}],
-    ]
-
-    # Generate responses using both models
-    updated_conversations = batch_conversations_generate(
-        conversations,
-        tokenizer,
-        input_queue1, output_queue1,
-        input_queue2, output_queue2,
-        model='both'  # Options: 'model1', 'model2', 'both'
-    )
-
-    # Display the updated conversations
-    for conv in updated_conversations:
-        print("Conversation:")
-        for msg in conv:
-            print(f"{msg['role']}: {msg['content']}")
-        print("-" * 40)
+    #WRITE CODE HERE!!!
 
     # Terminate worker processes gracefully
     terminate_workers(input_queue1, input_queue2, p1, p2)
