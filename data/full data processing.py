@@ -20,40 +20,32 @@ def process_questions(input_file, output_file):
     # Load the data from the CSV file
     df = pd.read_csv(input_file)
     
-    # Check if the output file exists to determine if headers should be written
-    file_exists = os.path.isfile(output_file)
+    # Create empty output CSV with headers
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['problem', 'solution', 'context_vector'])
     
-    # Create the directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    
-    with open(output_file, 'a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['question_text', 'context_vector']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        # Write headers only if the file does not exist
-        if not file_exists:
-            writer.writeheader()
-        
-        for index, row in df.iterrows():
-            try:
-                question = row['problem']
+    # Process each question one at a time
+    for index, row in df.iterrows():
+        try:
+            # Get embedding for the problem
+            embedding = get_embedding(row['problem'])
+            
+            # Append to CSV
+            with open(output_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    row['problem'],
+                    row['solution'],
+                    embedding.tolist()  # Convert numpy array to list for CSV storage
+                ])
+            
+            if index % 10 == 0:  # Print progress every 10 items
+                print(f"Processed {index + 1}/{len(df)} questions")
                 
-                # Get context vector embedding
-                context_vector = get_embedding(question)
-                
-                # Write the result to the CSV file
-                writer.writerow({
-                    "question_text": question,
-                    "context_vector": context_vector.tolist()  # Convert numpy array to list for CSV
-                })
-                
-                # Optional: Add progress indicator
-                if (index + 1) % 10 == 0:
-                    print(f"Processed {index + 1} questions...")
-                    
-            except Exception as e:
-                print(f"Error processing question at index {index}: {str(e)}")
-                continue
+        except Exception as e:
+            print(f"Error processing question {index + 1}: {str(e)}")
+            continue
     
     print(f"Processing complete. Results saved to {output_file}")
 
