@@ -28,12 +28,16 @@ for pdf_text in math['text']:
         prompt = (
             "Extract and write in LaTeX all of the question-answers pairs of the following text "
             "in a python list of tuples. Skip any questions that you cannot write LaTeX for, or do "
-            "not make sense with what you are given. Return only the python list of tuples. Do not worry about question "
-            "numbers or point values. All questions should make sense on their own. Make sure that you return the full question, and the answer."
-            "Moreover, all answers should be integers. Add some answer extraction at the end of the question to try to make the answer an integer."
-            "If this is not possible, "
-            "Your response should look like: '[(r'What is $1+1$?', r'By addition, the answer is $\\boxed{2}$')].' "
-            "Here is the text: " + chunk
+            "not make sense with what you are given. Return only the python list of tuples.\n\n"
+            "Requirements:\n"
+            "- Questions should be self-contained (no context needed)\n"
+            "- All answers must be integers\n"
+            "- Include any necessary integer extraction instructions in the question\n"
+            "- Use proper LaTeX formatting\n\n"
+            "Format: [(r'question_in_latex', integer_answer)]\n"
+            "Example: [(r'What is $\sqrt{50} + \sqrt{50}$? If your answer can be expressed in the form $a\sqrt{b}$, where "
+            "$a$ and $b$ are positive integers such that $b$ is not divisible by any perfect square, compute $a+b$.', 12)]\n\n"
+            "Text to process: " + chunk
         )
         
         response = model.generate_content(prompt, request_options=retry_policy)
