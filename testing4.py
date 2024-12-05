@@ -18,7 +18,7 @@ import pandas as pd
 
 All_questions = []
 
-for pdf_text in math['Text']:
+for pdf_text in math['text']:
     # Split pdf_text into chunks of around 4096 words
     words = pdf_text.split()
     chunk_size = 4096
