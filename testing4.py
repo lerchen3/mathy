@@ -24,7 +24,7 @@ llm = LLM(
     llm_model_pth,
     dtype="half",                # The data type for the model weights and activations
     max_num_seqs=8,              # Maximum number of sequences per iteration. Default is 256
-    max_model_len=16384,          # Model context length
+    max_model_len=32768,          # Model context length
     trust_remote_code=True,      # Trust remote code (e.g., from HuggingFace) when downloading the model and tokenizer
     tensor_parallel_size=4,      # The number of GPUs to use for distributed execution with tensor parallelism
     gpu_memory_utilization=0.95, # The ratio (between 0 and 1) of GPU memory to reserve for the model
@@ -35,7 +35,7 @@ tokenizer = llm.get_tokenizer()
 # Define Sampling Parameters
 sampling_params = SamplingParams(
     temperature=0.0,
-    max_tokens=16384,
+    max_tokens=32768,
     stop=None
 )
 
@@ -68,9 +68,11 @@ def clean_memory(deep=False):
 # Read the CSV file containing math competition solutions
 math = pd.read_csv('/kaggle/input/un-parsed-soluions-file/math_competitions_solutions.csv')
 
-All_questions = []
-cnt = 0
-save_counter = 0  # Add counter for periodic saves
+# Load the checkpoint
+checkpoint_df = pd.read_csv('/kaggle/input/checkpoints/allquestionanswers8.csv')
+All_questions = list(zip(checkpoint_df['Question'], checkpoint_df['Answer']))
+cnt = len(All_questions)  # Initialize counter to current length
+save_counter = 8  # Start from checkpoint 8
 
 def process_batch(batch_texts: List[str]) -> None:
     global cnt, save_counter, All_questions
@@ -166,9 +168,15 @@ def process_conversation_batch(conversations: List[List[dict]]) -> None:
             print("No list found in response:")
             print(text)
 
-# Replace the main processing loop with batched processing
+# Modified main processing loop to start from batch 16
 batch_size = 8
-for i in tqdm(range(0, len(math['text']), batch_size), desc="Processing document batches"):
+total_batches = len(math['text'])
+start_batch = 16  # Start from batch 16 (index 15)
+
+for i in tqdm(range(start_batch * batch_size, len(math['text']), batch_size), 
+              initial=start_batch, 
+              total=len(math['text'])//batch_size,
+              desc="Processing document batches"):
     batch_texts = math['text'][i:i+batch_size].tolist()
     process_batch(batch_texts)
 
