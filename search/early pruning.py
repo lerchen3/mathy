@@ -130,16 +130,15 @@ def batch_conversations_generate(conversations, tokenizer, input_queue1, output_
     )
 
     if model == 'model1':
+        print(f"\n[LLM Call - Model1 (QwQ-32b)] Generating responses for {len(conversations)} conversations")
         input_queue1.put({"batch": conversations_texts, "sampling_params": sampling_params})
         outputs = output_queue1.get()
     else:
+        print(f"\n[LLM Call - Model2 (Qwen-32b)] Generating responses for {len(conversations)} conversations")
         input_queue2.put({"batch": conversations_texts, "sampling_params": sampling_params})
         outputs = output_queue2.get()
 
-    # Append responses
-    for i, conversation in enumerate(conversations):
-        conversation.append({'role': 'assistant', 'content': outputs[i]})
-
+    print(f"[LLM Response] Generated {len(outputs)} responses")
     return conversations
 
 
@@ -211,10 +210,10 @@ def run_analysis_with_model2(conversations, tokenizer, input_queue1, output_queu
     # We'll try to extract only relevant info from the conversation:
     # The instructions: 
     # "Use Qwen-32b (model2), batch-size-(however many), on the conversations in active_conversations.
-    # [you’ll have to create a prompt for this], output:
-    #  “CURRENT APPROACH: <use a cohesive subset of the text given, remove unnecessary details> \n
+    # [you'll have to create a prompt for this], output:
+    #  "CURRENT APPROACH: <use a cohesive subset of the text given, remove unnecessary details> \n
     #   ANALYSIS (of whether the approach shows promise in finding an answer) <analysis> \n
-    #   ON A GOOD PATH <yes / no>.”
+    #   ON A GOOD PATH <yes / no>.
     # For simplicity, we'll provide a system message that instructs model2 to read the conversation and produce that format.
 
     # We'll just pass the entire conversation as if user said it, and a system message instructing the format.
@@ -250,16 +249,16 @@ def run_analysis_with_model2(conversations, tokenizer, input_queue1, output_queu
     # Run model2 on all these
     analyzed_convs = batch_conversations_generate(model2_input, tokenizer, input_queue1, output_queue1, input_queue2, output_queue2, model='model2', max_tokens=2048)
 
-    # Extract results
+    print("[Analysis Results]")
     results = []
     for ac in analyzed_convs:
-        # The assistant's last message is the model2 output
         analysis_text = ac[-1]['content']
         current_approach, path = parse_current_approach_and_path(analysis_text)
         if current_approach is None or path is None:
-            # error
+            print("- Error parsing analysis")
             results.append(('error', None))
         else:
+            print(f"- Path: {path}")
             results.append((path, current_approach))
     return results
 
@@ -346,6 +345,7 @@ def predict_for_question(question: str,
 
     # Steps outline:
     # 1) Get random subset of size 8
+    print("\n[Initial Generation] Starting with 8 random prompts for each conversation set")
     prompts_1 = get_n_prompts(8, thoughts)
     convs_1 = create_conversations_from_prompts(prompts_1, question)
 
@@ -363,6 +363,7 @@ def predict_for_question(question: str,
 
     # 3b) Check if any in active_conversations1 have oxed{}:
     def process_conversations_for_answers_and_filter(convs):
+        print(f"\n[Processing] Checking {len(convs)} conversations for answers")
         # Extract answers
         # If found, append answer to extracted_answers
         # Then run analysis with model2, parse result
@@ -447,21 +448,27 @@ def predict_for_question(question: str,
     # total rounds: steps 4 to 17 => 14 iterations
     # i in range(4,18)
     for step_num in range(4, 18):
+        print(f"\n[Step {step_num}] Starting iteration")
         if step_num % 2 == 0:
-            # even step: generate on set1, analyze set2
+            print(f"[Step {step_num}] Generating on set1, analyzing set2")
             active_conversations1 = generation_step(active_conversations1, 'model1')
             active_conversations2 = analysis_step(active_conversations2)
         else:
-            # odd step: generate on set2, analyze set1
+            print(f"[Step {step_num}] Generating on set2, analyzing set1")
             active_conversations2 = generation_step(active_conversations2, 'model1')
             active_conversations1 = analysis_step(active_conversations1)
 
-        # Check answers count
+        print(f"[Progress] Current answer count: {len(extracted_answers)}")
         if len(extracted_answers) >= 5:
-            return select_answer(extracted_answers)
+            final_answer = select_answer(extracted_answers)
+            print(f"[Early Exit] Found enough answers ({len(extracted_answers)}). Selected: {final_answer}")
+            return final_answer
 
     # After finishing all steps, do final selection:
-    return select_answer(extracted_answers)
+    final_answer = select_answer(extracted_answers)
+    print(f"\n[Final Result] Total answers found: {len(extracted_answers)}")
+    print(f"[Final Result] Selected answer: {final_answer}")
+    return final_answer
 
 
 if __name__ == '__main__':
@@ -481,7 +488,7 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(model1_path)
 
     # Example question
-    question = "What is 123+456?"
+    question = "Let $ABC$ be a triangle inscribed in circle $\omega$. Let the tangents to $\omega$ at $B$ and $C$ intersect at point $D$, and let $\overline{AD}$ intersect $\omega$ at $P$. If $AB=5$, $BC=9$, and $AC=10$, $AP$ can be written as the form $\frac{m}{n}$, where $m$ and $n$ are relatively prime integers. Find $m + n$."
 
     answer = predict_for_question(question, tokenizer, input_queue1, output_queue1, input_queue2, output_queue2)
     print("Final answer:", answer)

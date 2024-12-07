@@ -277,8 +277,6 @@ if __name__ == '__main__':
     for question in questions:
         ans = predict_for_question(question)
         answers.append(ans)
-    # Initialize a tokenizer (assuming both models use the same tokenizer)
-    # If different, initialize separate tokenizers for each model
     print("-"*100)
     print("ANSWERS:")
     print(answers)
